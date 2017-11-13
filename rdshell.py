@@ -77,7 +77,7 @@ class RDShell:
             setattr(self, var, default_value)
 
 if __name__ == '__main__':
-    s = RDShell(token="AUoE4zT8Pnl2HakRkzMwfec0FaytO8GA")
+    s = RDShell(token=".....")
     #print s("system/info")
     #print s('scheduler/jobs')
     print s("exec/test/test", argString="-opt value -answer 42", filter="name:delivery-ftp.nym1.placeiq.net")
