@@ -90,7 +90,6 @@ def RDRUN(self, url, cmd, params, headers):
 def RDACTUALRUN(self, url, cmd, params, headers):
     job = params["_job"]
     del params["_job"]
-    print repr(params)
     res = requests.post(url,headers=headers, params={"format":"json"}, json=params).text
     return res
 
