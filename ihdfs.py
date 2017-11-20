@@ -41,6 +41,10 @@ PARSER.add_argument("-F", "--filter", help="add filtering for the files found",
                     type=str)
 PARSER.add_argument("-R", "--run", help="Name of the action to execute for each element",
                     action="append")
+PARSER.add_argument("--files", help="Execute files operations",
+                    action="store_true")
+PARSER.add_argument("--directories", help="Execute directories operations",
+                    action="store_true")
 PARSER.add_argument('PATH', action='append', nargs='+')
 ARG = PARSER.parse_args()
 
@@ -52,15 +56,26 @@ class iHDFS_Filter:
     def run_filter(self, filter, _f, s):
         return True
 
-class iHDFS_Display:
+class iHDFS_FileDisplay:
     def __init__(self):
-        self.actions["display"] = (self.display, False)
-    def display(self, _f, s):
+        self.actions["display"] = (self.f_display, False)
+    def f_display(self, _f, s):
         print _f
+class iHDFS_DirDisplay:
+    def __init__(self):
+        self.dir_actions["ls"] = (self.d_display, False)
+    def d_display(self, _f, s):
+        print "DIR:",_f
+
+class iHDFS_Display(iHDFS_FileDisplay, iHDFS_DirDisplay):
+    def __init__(self):
+        iHDFS_FileDisplay.__init__(self)
+        iHDFS_DirDisplay.__init__(self)
 
 class iHDFS(iHDFS_Filter, iHDFS_Display):
     def __init__(self, **kw):
         self.actions = {}
+        self.dir_actions = {}
         for c in self.__class__.__bases__:
             c.__init__(self)
         iHDFS_Display.__init__(self)
@@ -76,31 +91,49 @@ class iHDFS(iHDFS_Filter, iHDFS_Display):
             self.queue.put(path)
         else:
             for d, subd, files in self.fs.walk(path):
-                for f in files:
-                    _f = "%s/%s"%(d, f)
-                    self.queue.put(_f)
+                if self.arg.directories:
+                    self.queue.put((d,False))
+                if self.arg.files:
+                    for f in files:
+                        _f = "%s/%s"%(d, f)
+                        self.queue.put((_f, True))
     def arbiter(self):
         self.run_action = []
+        self.run_dir_action = []
         for r in self.arg.run:
             r = r.lower()
             if r in self.actions.keys():
                 self.run_action.append(self.actions[r])
+            elif r in self.dir_actions.keys():
+                self.run_dir_action.append(self.dir_actions[r])
+            else:
+                continue
     def worker(self, *args):
         while True:
             _f = self.queue.get()
             if _f is None:
                 break
-            try:
-                s = self.fs.get_file_status(_f)
-            except:
-                continue
-            if self.filter:
-                for fi in self.filter.keys():
-                    if not self.run_filter(fi, _f, s):
-                        continue
-            for a, isExec in self.run_action:
-                if (isExec == True and self.arg.Execute) or isExec == False:
-                    apply(a, (_f, s))
+            _f, isFile = _f
+            if isFile:
+                try:
+                    s = self.fs.get_file_status(_f)
+                except:
+                    continue
+                if self.filter:
+                    for fi in self.filter.keys():
+                        if not self.run_filter(fi, _f, s):
+                            continue
+                for a, isExec in self.run_action:
+                    if (isExec == True and self.arg.Execute) or isExec == False:
+                        apply(a, (_f, s))
+            else:
+                try:
+                    s = self.fs.list_status(_f)
+                except:
+                    continue
+                for a, isExec in self.run_dir_action:
+                    if (isExec == True and self.arg.Execute) or isExec == False:
+                        apply(a, (_f, s))
     def start(self):
         self.workers = [Process(target=self.worker, args=(i,))
                         for i in xrange(self.arg.workers)]
