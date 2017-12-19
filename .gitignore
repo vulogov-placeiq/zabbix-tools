@@ -2,3 +2,5 @@
 ihdfs
 ihdfs.c
 .swp
+ihdfs.build/*
+ihdfs.exe
