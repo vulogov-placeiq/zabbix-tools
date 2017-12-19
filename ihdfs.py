@@ -4,6 +4,7 @@ import sys
 import os
 import time
 import re
+import fnmatch
 from multiprocessing import Process, Queue
 
 try:
@@ -53,8 +54,10 @@ class iHDFS_Filter:
         self.make_filters()
     def make_filters(self):
         pass
-    def run_filter(self, filter, _f, s):
-        return True
+    def run_filter(self, filter, filter_value, _f, s):
+        if filter == "dir" and not s and fnmatch.fnmatch(_f, filter_value):
+            return True
+        return False
 
 class iHDFS_FileDisplay:
     def __init__(self):
@@ -72,13 +75,24 @@ class iHDFS_Display(iHDFS_FileDisplay, iHDFS_DirDisplay):
         iHDFS_FileDisplay.__init__(self)
         iHDFS_DirDisplay.__init__(self)
 
-class iHDFS(iHDFS_Filter, iHDFS_Display):
+class iHDFS_DirRemove:
+    def __init__(self):
+        self.dir_actions["rmdir"] = (self.d_rm, False)
+    def d_rm(self, _f, s):
+        res = self.fs.delete(_f, recursive=True)
+        if res:
+            print "RM:",_f
+
+class iHDFS_Ops(iHDFS_DirRemove):
+    def __init__(self):
+        iHDFS_DirRemove.__init__(self)
+
+class iHDFS(iHDFS_Filter, iHDFS_Display, iHDFS_Ops):
     def __init__(self, **kw):
         self.actions = {}
         self.dir_actions = {}
         for c in self.__class__.__bases__:
             c.__init__(self)
-        iHDFS_Display.__init__(self)
         self.arg = kw["arg"]
         self.fs = pyhdfs.HdfsClient(hosts=kw['hosts'], user_name=kw['user_name'])
         self.queue = Queue()
@@ -109,31 +123,38 @@ class iHDFS(iHDFS_Filter, iHDFS_Display):
             else:
                 continue
     def worker(self, *args):
-        while True:
-            _f = self.queue.get()
-            if _f is None:
-                break
-            _f, isFile = _f
-            if isFile:
-                try:
-                    s = self.fs.get_file_status(_f)
-                except:
-                    continue
-                if self.filter:
-                    for fi in self.filter.keys():
-                        if not self.run_filter(fi, _f, s):
-                            continue
-                for a, isExec in self.run_action:
-                    if (isExec == True and self.arg.Execute) or isExec == False:
-                        apply(a, (_f, s))
-            else:
-                try:
-                    s = self.fs.list_status(_f)
-                except:
-                    continue
-                for a, isExec in self.run_dir_action:
-                    if (isExec == True and self.arg.Execute) or isExec == False:
-                        apply(a, (_f, s))
+        try:
+            while True:
+                _f = self.queue.get()
+                if _f is None:
+                    break
+                _f, isFile = _f
+                if isFile:
+                    try:
+                        s = self.fs.get_file_status(_f)
+                    except:
+                        continue
+                    if self.filter:
+                        for fi in self.filter.keys():
+                            if not self.run_filter(fi, self.filter[fi], _f, s):
+                                return
+                    for a, isExec in self.run_action:
+                        if (isExec == True and self.arg.Execute) or isExec == False:
+                            apply(a, (_f, s))
+                else:
+                    try:
+                        s = self.fs.list_status(_f)
+                    except:
+                        continue
+                    if self.filter:
+                        for fi in self.filter.keys():
+                            if not self.run_filter(fi, self.filter[fi], _f, s):
+                                return
+                    for a, isExec in self.run_dir_action:
+                        if (isExec == True and self.arg.Execute) or isExec == False:
+                            apply(a, (_f, s))
+        except KeyboardInterrupt:
+            return
     def start(self):
         self.workers = [Process(target=self.worker, args=(i,))
                         for i in xrange(self.arg.workers)]
@@ -169,4 +190,8 @@ def main():
         f.run(p)
     f.stop()
 
-main()
+try:
+    main()
+except KeyboardInterrupt:
+    print "Interrupted by YOU!"
+    sys.exit()
