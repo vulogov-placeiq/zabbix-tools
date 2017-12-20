@@ -7,11 +7,26 @@ import re
 import fnmatch
 from multiprocessing import Process, Queue
 
-try:
-    import pyhdfs
-except ImportError:
-    print "HDFS module required for this tool is not installed"
-    sys.exit(10)
+def install_and_import(package):
+    import importlib
+    try:
+        importlib.import_module(package)
+    except ImportError:
+        import pip
+        try:
+            pip.main(['install', package])
+        except:
+            print "Error while installing the module",package
+            sys.exit(10)
+    finally:
+        try:
+            globals()[package] = importlib.import_module(package)
+        except ImportError, msg:
+            print "Error while importing the module %s"%package
+            print msg
+            sys.exit(10)
+
+install_and_import("pyhdfs")
 
 try:
     import argparse
