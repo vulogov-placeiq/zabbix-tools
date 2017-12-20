@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import socket
 import struct
 import sys
@@ -52,7 +53,7 @@ def get(host, key, var, _match, _second_key, op):
     elif op == 'delta':
         return '{0:.2f}'.format(float(max(out)-min(out)))
     return 0.0
-    
+
 
 if __name__ == '__main__':
     print get('phoenix-091.nym1.placeiq.net', 'vfs.fs.discovery', '{#FSNAME}', '/data/*', 'vfs.fs.size[{0},free]', 'sum')
