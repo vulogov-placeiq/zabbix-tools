@@ -203,8 +203,8 @@ def main():
     f = iHDFS(hosts=HDFS_NM, user_name=ARG.user, arg=ARG)
     f.start()
     for p in HDFS_PATH:
-        if p.count("/") < ARG.min_depth:
-            print "[%s] has been rejected due to the minimal depth constrain"%p
+        if p.count("/") < ARG.min_depth or ARG.min_depth == 1:
+            print "[%s] has been rejected due to the minimal depth constrain %d"%(p, ARG.min_depth)
             continue
         try:
             s = f.fs.list_status(p)
