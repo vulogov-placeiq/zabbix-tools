@@ -55,6 +55,8 @@ PARSER.add_argument("--Execute", help="Force execution of the default actions. D
                     action="store_true")
 PARSER.add_argument("-F", "--filter", help="add filtering for the files found",
                     type=str)
+PARSER.add_argument("--min-depth", help="Minimal depth of the root path",
+                    type=int, default=100)
 PARSER.add_argument("-R", "--run", help="Name of the action to execute for each element",
                     action="append")
 PARSER.add_argument("--files", help="Execute files operations",
@@ -94,7 +96,10 @@ class iHDFS_DirRemove:
     def __init__(self):
         self.dir_actions["rmdir"] = (self.d_rm, False)
     def d_rm(self, _f, s):
-        res = self.fs.delete(_f, recursive=True)
+        try:
+            res = self.fs.delete(_f, recursive=True)
+        except:
+            "RM(Failed):",_f
         if res:
             print "RM:",_f
 
@@ -109,6 +114,7 @@ class iHDFS(iHDFS_Filter, iHDFS_Display, iHDFS_Ops):
         for c in self.__class__.__bases__:
             c.__init__(self)
         self.arg = kw["arg"]
+        print kw["hosts"]
         self.fs = pyhdfs.HdfsClient(hosts=kw['hosts'], user_name=kw['user_name'])
         self.queue = Queue()
         self.arbiter()
@@ -168,7 +174,7 @@ class iHDFS(iHDFS_Filter, iHDFS_Display, iHDFS_Ops):
                     for a, isExec in self.run_dir_action:
                         if (isExec == True and self.arg.Execute) or isExec == False:
                             apply(a, (_f, s))
-        except KeyboardInterrupt:
+        except:
             return
     def start(self):
         self.workers = [Process(target=self.worker, args=(i,))
@@ -197,6 +203,9 @@ def main():
     f = iHDFS(hosts=HDFS_NM, user_name=ARG.user, arg=ARG)
     f.start()
     for p in HDFS_PATH:
+        if p.count("/") < ARG.min_depth:
+            print "[%s] has been rejected due to the minimal depth constrain"%p
+            continue
         try:
             s = f.fs.list_status(p)
         except pyhdfs.HdfsFileNotFoundException, msg:
